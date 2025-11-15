@@ -1,0 +1,103 @@
+# =========================================================
+# GLOBAL IGNORE RULES (Node, PNPM, Yarn, Editors, OS)
+# =========================================================
+
+# Node dependencies
+node_modules/
+**/node_modules/
+
+# PNPM
+.pnpm-debug.log*
+.pnp
+.pnp.*
+.pnpm-store/
+
+# Yarn
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Lockfiles for other package managers (pnpm is used)
+package-lock.json
+yarn.lock
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor configs
+.vscode/
+.idea/
+
+
+# =========================================================
+# NEXT.JS FRONTEND BUILD ARTIFACTS
+# =========================================================
+
+# Next.js build output
+.next/
+out/
+
+# Production builds
+build/
+
+
+# =========================================================
+# TESTING
+# =========================================================
+coverage/
+
+
+# =========================================================
+# ENV FILES
+# =========================================================
+
+# Ignore all env files
+.env*
+# But keep example env file
+!.env.example
+
+
+# =========================================================
+# VERCEL DEPLOYMENT
+# =========================================================
+.vercel/
+
+
+# =========================================================
+# TYPESCRIPT
+# =========================================================
+*.tsbuildinfo
+next-env.d.ts
+
+
+# =========================================================
+# FASTAPI BACKEND (Python)
+# =========================================================
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+.env/
+
+# FastAPI build artifacts
+dist/
+build/
+
+# Python virtual environments
+.venv/
+venv/
+fast-api-backend/.venv/
