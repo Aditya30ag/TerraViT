@@ -2,7 +2,7 @@ import React from "react";
 
 const CapabilitiesSection: React.FC = () => {
   return (
-    <section id="capabilities" className="space-y-6 bg-white">
+    <section id="capabilities" className="space-y-6 bg-white p-4 rounded-2xl">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">

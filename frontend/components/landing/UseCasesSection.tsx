@@ -3,7 +3,7 @@ import React from "react";
 const UseCasesSection: React.FC = () => {
   return (
     <section id="use-cases" className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-4 bg-white p-4 rounded-2xl">
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Built for teams on the frontlines

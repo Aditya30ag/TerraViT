@@ -4,7 +4,7 @@ const HowItWorksSection: React.FC = () => {
   return (
     <section
       id="how-it-works"
-      className="grid gap-10 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1.2fr)] items-start"
+      className="grid gap-10 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1.2fr)] items-start bg-white p-4 rounded-2xl"
     >
       <div className="space-y-4">
         <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
