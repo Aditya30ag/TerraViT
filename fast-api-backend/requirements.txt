@@ -5,3 +5,4 @@ torchvision==0.18.1
 Pillow==10.4.0
 python-multipart==0.0.9
 einops==0.8.0
+httpx==0.27.0

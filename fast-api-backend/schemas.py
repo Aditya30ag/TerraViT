@@ -14,3 +14,24 @@ class HealthResponse(BaseModel):
     status: str
     model_loaded: bool
     device: str
+
+
+class ClimateRiskRequest(BaseModel):
+    lat: float
+    lon: float
+    date: Optional[str] = None  # ISO date; if omitted, use current/forecast
+
+
+class ClimateRiskScores(BaseModel):
+    heat_risk: float
+    flood_risk: float
+    vegetation_stress: float
+    air_quality_proxy: float
+    overall_risk: float
+
+
+class ClimateRiskResponse(BaseModel):
+    lat: float
+    lon: float
+    scores: ClimateRiskScores
+    summary: str
