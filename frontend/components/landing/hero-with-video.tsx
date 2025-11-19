@@ -21,34 +21,12 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
   const router = useRouter();
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const toggleDropdown = (dropdownName: string) => {
     setOpenDropdown(openDropdown === dropdownName ? null : dropdownName);
   };
 
-  const ThemeToggleButton = () => {
-    if (!mounted) return <div className="w-10 h-10" />;
-    return (
-      <button
-        onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-        className="bg-muted hover:bg-border flex-shrink-0 p-2.5 rounded-full transition-colors"
-        aria-label="Toggle theme"
-      >
-        {theme === "light" ? (
-          <Moon className="h-5 w-5 text-foreground" />
-        ) : (
-          <Sun className="h-5 w-5 text-foreground" />
-        )}
-      </button>
-    );
-  };
 
   return (
     <main className="absolute inset-0 bg-background overflow-y-auto">
@@ -57,7 +35,7 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
         <div className="py-2 relative z-20 flex items-center justify-between gap-4">
           <div className="flex items-center gap-6">
             <a
-              href="#top"
+              href="/"
               className="font-bold text-2xl pb-1 text-white cursor-pointer flex-shrink-0"
             >
               {brandName}
@@ -66,7 +44,7 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
               <ul className="flex items-center space-x-2">
                 <li>
                   <a
-                    href="#about"
+                    href="/about"
                     className="hover:text-foreground px-3 py-2 text-sm transition-colors rounded-lg"
                   >
                     About
@@ -113,39 +91,6 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
                     How it works
                   </a>
                 </li>
-                <li className="relative">
-                  <button
-                    onClick={() => toggleDropdown("desktop-pricing")}
-                    className="flex items-center hover:text-foreground px-3 py-2 text-sm transition-colors rounded-lg"
-                  >
-                    Plans & Pricing
-                    <ChevronDown
-                      className={`h-4 w-4 ml-1 transition-transform ${
-                        openDropdown === "desktop-pricing" ? "rotate-180" : ""
-                      }`}
-                    />
-                  </button>
-                  {openDropdown === "desktop-pricing" && (
-                    <ul className="absolute top-full left-0 mt-2 p-2 bg-card border border-border shadow-lg rounded-xl z-20 w-48">
-                      <li>
-                        <a
-                          href="#"
-                          className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
-                        >
-                          Plan A
-                        </a>
-                      </li>
-                      <li>
-                        <a
-                          href="#"
-                          className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
-                        >
-                          Plan B
-                        </a>
-                      </li>
-                    </ul>
-                  )}
-                </li>
               </ul>
             </nav>
           </div>
@@ -170,7 +115,6 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
                 <ArrowRight className="h-4 w-4" />
               </a>
             </div>
-            <ThemeToggleButton />
             <div className="lg:hidden relative">
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -182,7 +126,7 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
                 <ul className="absolute top-full right-0 mt-2 p-2 shadow-lg bg-card border border-border rounded-xl w-56 z-30">
                   <li>
                     <a
-                      href="#about"
+                      href="/about"
                       className="block px-3 py-2 text-sm text-foreground hover:bg-muted rounded-lg"
                     >
                       About

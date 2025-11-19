@@ -1,10 +1,8 @@
 "use client";
-import { NavbarHero } from "@/components/landing/hero-with-video";
-import React, { useEffect, useRef, useState } from "react";
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
-import type { Map as LeafletMap } from "leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+import React, { useState } from "react";
+import dynamic from "next/dynamic";
+
+const ClimateMap = dynamic(() => import("./ClimateMap"), { ssr: false });
 
 export default function Climate() {
 
@@ -20,6 +18,20 @@ export default function Climate() {
     air_quality_proxy: number;
     overall_risk: number;
   } | null>(null);
+
+  const [history, setHistory] = useState<
+    | {
+        year: number;
+        scores: {
+          heat_risk: number;
+          flood_risk: number;
+          vegetation_stress: number;
+          air_quality_proxy: number;
+          overall_risk: number;
+        };
+      }[]
+    | null
+  >(null);
 
   const [selectedLocation, setSelectedLocation] = useState<string>("custom");
   const [selectedStat, setSelectedStat] = useState<
@@ -38,23 +50,6 @@ export default function Climate() {
     { id: "london", name: "London, UK", lat: "51.5074", lon: "-0.1278" },
     { id: "newyork", name: "New York, USA", lat: "40.7128", lon: "-74.0060" },
   ];
-
-  const currentLocationIcon = L.divIcon({
-    html:
-      '<div style="width:18px;height:18px;border-radius:9999px;background:#2563eb;border:2px solid white;box-shadow:0 0 6px rgba(0,0,0,0.45);"></div>',
-    iconSize: [18, 18],
-    iconAnchor: [9, 9],
-    className: "",
-  });
-
-  const staticLocationIcon = L.divIcon({
-    html:
-      '<div style="width:14px;height:14px;border-radius:9999px;background:#6b7280;border:2px solid white;box-shadow:0 0 4px rgba(0,0,0,0.35);"></div>',
-    iconSize: [14, 14],
-    iconAnchor: [7, 7],
-    className: "",
-  });
-
   const handleLocationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;
     setSelectedLocation(value);
@@ -67,33 +62,12 @@ export default function Climate() {
 
   const API_BASE_URL = "http://localhost:8000";
 
-  const mapRef = useRef<LeafletMap | null>(null);
-
-  const MapClickHandler: React.FC = () => {
-    useMapEvents({
-      click(e) {
-        const { lat: clickLat, lng: clickLng } = e.latlng;
-        setLat(clickLat.toFixed(4));
-        setLon(clickLng.toFixed(4));
-        setSelectedLocation("custom");
-      },
-    });
-    return null;
-  };
-
-  useEffect(() => {
-    const latNum = parseFloat(lat);
-    const lonNum = parseFloat(lon);
-    if (!Number.isNaN(latNum) && !Number.isNaN(lonNum) && mapRef.current) {
-      mapRef.current.setView([latNum, lonNum]);
-    }
-  }, [lat, lon]);
-
   const fetchClimateRisk = async () => {
     setIsLoading(true);
     setError("");
     setSummary("");
     setScores(null);
+    setHistory(null);
 
     const latNum = parseFloat(lat);
     const lonNum = parseFloat(lon);
@@ -121,6 +95,26 @@ export default function Climate() {
       const data = await response.json();
       setSummary(data.summary);
       setScores(data.scores);
+
+      // Fetch last 10 years of history in a best-effort way
+      try {
+        const historyResp = await fetch(`${API_BASE_URL}/risk/history`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ lat: latNum, lon: lonNum }),
+        });
+
+        if (historyResp.ok) {
+          const historyData = await historyResp.json();
+          if (Array.isArray(historyData.years)) {
+            setHistory(historyData.years);
+          }
+        }
+      } catch {
+        // Silently ignore history errors; snapshot is still useful
+      }
     } catch (e) {
       setError("Unable to reach TerraViT backend. Is it running on port 8000?");
     } finally {
@@ -189,48 +183,15 @@ export default function Climate() {
           </div>
 
           <div className="mt-4 h-[480px] w-full overflow-hidden rounded-xl border border-border">
-            <MapContainer
-              center={[
-                parseFloat(lat) || 28.6139,
-                parseFloat(lon) || 77.2090,
-              ]}
-              zoom={5}
-              style={{ height: "100%", width: "100%" }}
-              scrollWheelZoom={true}
-              whenCreated={(map) => {
-                mapRef.current = map;
-              }}
-            >
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-              <MapClickHandler />
-
-              {/* Dropped pin for the currently selected location */}
-              {!Number.isNaN(parseFloat(lat)) && !Number.isNaN(parseFloat(lon)) && (
-                <Marker
-                  position={[parseFloat(lat), parseFloat(lon)]}
-                  icon={currentLocationIcon}
-                />
-              )}
-
-              {/* Static preset location markers */}
-              {STATIC_LOCATIONS.filter((loc) => loc.lat && loc.lon).map((loc) => (
-                <Marker
-                  key={loc.id}
-                  position={[parseFloat(loc.lat), parseFloat(loc.lon)]}
-                  icon={staticLocationIcon}
-                  eventHandlers={{
-                    click: () => {
-                      setLat(loc.lat);
-                      setLon(loc.lon);
-                      setSelectedLocation(loc.id);
-                    },
-                  }}
-                />
-              ))}
-            </MapContainer>
+            <ClimateMap
+              lat={lat}
+              lon={lon}
+              setLat={setLat}
+              setLon={setLon}
+              selectedLocation={selectedLocation}
+              setSelectedLocation={setSelectedLocation}
+              STATIC_LOCATIONS={STATIC_LOCATIONS}
+            />
           </div>
 
           {error && (
@@ -304,6 +265,53 @@ export default function Climate() {
 
           {summary && (
             <p className="mt-3 text-xs text-muted-foreground">{summary}</p>
+          )}
+
+          {history && history.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-sm font-medium mb-2">
+                Last 10 years – annual climate risk (modelled)
+              </h3>
+              <div className="overflow-x-auto rounded-md border border-border">
+                <table className="min-w-full text-[11px] md:text-xs">
+                  <thead className="bg-muted/60">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Year</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Overall</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Heat</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Flood</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Vegetation</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Air quality</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {history
+                      .slice()
+                      .sort((a, b) => a.year - b.year)
+                      .map((entry) => (
+                        <tr key={entry.year} className="odd:bg-background even:bg-muted/30">
+                          <td className="px-3 py-1.5 font-medium">{entry.year}</td>
+                          <td className="px-3 py-1.5">
+                            {(entry.scores.overall_risk * 100).toFixed(0)}%
+                          </td>
+                          <td className="px-3 py-1.5">
+                            {(entry.scores.heat_risk * 100).toFixed(0)}%
+                          </td>
+                          <td className="px-3 py-1.5">
+                            {(entry.scores.flood_risk * 100).toFixed(0)}%
+                          </td>
+                          <td className="px-3 py-1.5">
+                            {(entry.scores.vegetation_stress * 100).toFixed(0)}%
+                          </td>
+                          <td className="px-3 py-1.5">
+                            {(entry.scores.air_quality_proxy * 100).toFixed(0)}%
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
         </section>
 

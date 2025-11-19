@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Dict
+from typing import Dict, List
+from datetime import datetime
 from PIL import Image
 import io
 import httpx
@@ -11,6 +12,8 @@ from schemas import (
     ClimateRiskRequest,
     ClimateRiskResponse,
     ClimateRiskScores,
+    ClimateRiskHistoryYear,
+    ClimateRiskHistoryResponse,
 )
 from terravit_model import terravit_model
 
@@ -138,6 +141,84 @@ async def climate_risk_score(payload: ClimateRiskRequest) -> ClimateRiskResponse
         lon=payload.lon,
         scores=scores,
         summary=summary,
+    )
+
+
+@app.post("/risk/history", response_model=ClimateRiskHistoryResponse)
+async def climate_risk_history(payload: ClimateRiskRequest) -> ClimateRiskHistoryResponse:
+    """Return simple yearly climate risk scores over the last 10 years for a location.
+
+    This uses the Open-Meteo ERA5 archive API to fetch daily aggregates for each
+    year, then applies the same heuristic scoring used in `/risk/score`.
+    """
+
+    def clamp01(x: float) -> float:
+        return max(0.0, min(1.0, x))
+
+    async def compute_year_scores(client: httpx.AsyncClient, year: int) -> ClimateRiskHistoryYear:
+        base_url = "https://archive-api.open-meteo.com/v1/era5"
+        params = {
+            "latitude": payload.lat,
+            "longitude": payload.lon,
+            "start_date": f"{year}-01-01",
+            "end_date": f"{year}-12-31",
+            "daily": "temperature_2m_max,precipitation_sum,relative_humidity_2m_mean",
+        }
+
+        resp = await client.get(base_url, params=params)
+        resp.raise_for_status()
+        data = resp.json()
+        daily = data.get("daily", {})
+
+        temps = daily.get("temperature_2m_max") or []
+        precips = daily.get("precipitation_sum") or []
+        humid = daily.get("relative_humidity_2m_mean") or []
+
+        avg_temp = sum(temps) / len(temps) if temps else 20.0
+        max_temp = max(temps) if temps else avg_temp
+        total_precip = sum(precips) if precips else 0.0
+        avg_humid = sum(humid) / len(humid) if humid else 50.0
+
+        heat_risk = clamp01((max_temp - 25.0) / 15.0)
+        flood_risk = clamp01(total_precip / 1000.0)  # 1000mm/year -> ~1
+        vegetation_stress = clamp01((60.0 - avg_humid) / 40.0)
+        air_quality_proxy = clamp01(heat_risk * 0.5 + vegetation_stress * 0.5)
+
+        overall_risk = clamp01(
+            0.35 * heat_risk
+            + 0.30 * flood_risk
+            + 0.20 * vegetation_stress
+            + 0.15 * air_quality_proxy
+        )
+
+        scores = ClimateRiskScores(
+            heat_risk=heat_risk,
+            flood_risk=flood_risk,
+            vegetation_stress=vegetation_stress,
+            air_quality_proxy=air_quality_proxy,
+            overall_risk=overall_risk,
+        )
+
+        return ClimateRiskHistoryYear(year=year, scores=scores)
+
+    current_year = datetime.utcnow().year
+    years: List[int] = list(range(current_year - 9, current_year + 1))
+
+    history_years: List[ClimateRiskHistoryYear] = []
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        for year in years:
+            try:
+                year_scores = await compute_year_scores(client, year)
+            except httpx.HTTPError:
+                # Best-effort history: skip years that fail instead of aborting
+                continue
+            history_years.append(year_scores)
+
+    return ClimateRiskHistoryResponse(
+        lat=payload.lat,
+        lon=payload.lon,
+        years=history_years,
     )
 
 

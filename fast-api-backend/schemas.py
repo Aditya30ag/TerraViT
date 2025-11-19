@@ -35,3 +35,14 @@ class ClimateRiskResponse(BaseModel):
     lon: float
     scores: ClimateRiskScores
     summary: str
+
+
+class ClimateRiskHistoryYear(BaseModel):
+    year: int
+    scores: ClimateRiskScores
+
+
+class ClimateRiskHistoryResponse(BaseModel):
+    lat: float
+    lon: float
+    years: List[ClimateRiskHistoryYear]

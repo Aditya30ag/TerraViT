@@ -10,10 +10,10 @@ const AboutSection: React.FC = () => {
         <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           Climate intelligence, reimagined
         </h2>
-        <p className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
+        <p className="text-2xl md:text-3xl font-semibold tracking-tight text-white">
           TerraViT turns raw satellite pixels into early warnings for a warming planet.
         </p>
-        <p className="text-base md:text-lg text-muted-foreground leading-relaxed">
+        <p className="text-base md:text-lg text-white leading-relaxed">
           Built on Vision Transformers tuned for multi-spectral, multi-temporal Earth data,
           TerraViT continuously scans the globe to surface stress signals in vegetation,
           water, heat, and air qualityweeks or months before they translate into human
