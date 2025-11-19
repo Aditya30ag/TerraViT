@@ -54,7 +54,7 @@ export default function ClimateFeatureSection() {
         {/* CTA Button */}
         <button
           onClick={() => router.push("/climate-intel")}
-          className="mt-14 inline-flex items-center gap-2 px-8 py-4 rounded-xl text-lg font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-lg"
+          className="mt-14 inline-flex items-center gap-2 px-8 py-4 rounded-xl text-lg font-semibold bg-black text-white hover:bg-gray-700 transition-all shadow-lg"
         >
           Explore Climate Intelligence
           <ArrowRight className="w-5 h-5" />

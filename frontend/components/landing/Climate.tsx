@@ -126,7 +126,7 @@ export default function Climate() {
     <>
       <div className="relative mx-auto">
         <section className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-          <h2 className="text-2xl font-semibold mb-2">Climate Risk Snapshot</h2>
+          <h2 className="text-2xl font-semibold mb-2 text-black">Climate Risk Snapshot</h2>
           <p className="text-sm text-muted-foreground mb-4">
             Directly from TerraViT: enter a latitude / longitude and get a live climate
             risk score powered by real-time climate data.
@@ -134,13 +134,13 @@ export default function Climate() {
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">
+              <label className="block text-xs font-medium text-black mb-1">
                 Preset location
               </label>
               <select
                 value={selectedLocation}
                 onChange={handleLocationChange}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
               >
                 {STATIC_LOCATIONS.map((loc) => (
                   <option key={loc.id} value={loc.id}>
@@ -150,25 +150,25 @@ export default function Climate() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">
+              <label className="block text-xs font-medium text-black mb-1">
                 Latitude
               </label>
               <input
                 type="text"
                 value={lat}
                 onChange={(e) => setLat(e.target.value)}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">
+              <label className="block text-xs font-medium text-black mb-1">
                 Longitude
               </label>
               <input
                 type="text"
                 value={lon}
                 onChange={(e) => setLon(e.target.value)}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
               />
             </div>
             <div className="flex items-end">
@@ -202,14 +202,14 @@ export default function Climate() {
 
           {scores && (
             <>
-              <div className="mt-2 mb-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2 text-xs">
-                <span className="text-muted-foreground">Select statistic to highlight</span>
+              <div className="mt-2 mb-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2 text-xs text-black">
+                <span className="text-black">Select statistic to highlight</span>
                 <select
                   value={selectedStat}
                   onChange={(e) =>
                     setSelectedStat(e.target.value as typeof selectedStat)
                   }
-                  className="w-full md:w-52 rounded-md border border-border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full md:w-52 rounded-md border border-border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
                 >
                   <option value="overall_risk">Overall risk</option>
                   <option value="heat_risk">Heat</option>
@@ -218,53 +218,53 @@ export default function Climate() {
                   <option value="air_quality_proxy">Air quality proxy</option>
                 </select>
               </div>
-              <div className="mt-2 grid grid-cols-1 md:grid-cols-5 gap-3 text-xs">
+              <div className="mt-2 grid grid-cols-1 md:grid-cols-5 gap-3 text-xs text-black">
                 <div
                   className={`rounded-md bg-muted p-3 ${
                     selectedStat === "overall_risk" ? "ring-2 ring-blue-500" : ""
                   }`}
                 >
-                <p className="text-muted-foreground">Overall risk</p>
-                <p className="text-lg font-semibold">{(scores.overall_risk * 100).toFixed(0)}%</p>
+                <p className="text-black">Overall risk</p>
+                <p className="text-lg font-semibold text-black">{(scores.overall_risk * 100).toFixed(0)}%</p>
               </div>
                 <div
                   className={`rounded-md bg-muted p-3 ${
                     selectedStat === "heat_risk" ? "ring-2 ring-blue-500" : ""
                   }`}
                 >
-                <p className="text-muted-foreground">Heat</p>
-                <p className="text-lg font-semibold">{(scores.heat_risk * 100).toFixed(0)}%</p>
+                <p className="text-black">Heat</p>
+                <p className="text-lg font-semibold text-black">{(scores.heat_risk * 100).toFixed(0)}%</p>
               </div>
                 <div
                   className={`rounded-md bg-muted p-3 ${
                     selectedStat === "flood_risk" ? "ring-2 ring-blue-500" : ""
                   }`}
                 >
-                <p className="text-muted-foreground">Flood</p>
-                <p className="text-lg font-semibold">{(scores.flood_risk * 100).toFixed(0)}%</p>
+                <p className="text-black">Flood</p>
+                <p className="text-lg font-semibold text-black">{(scores.flood_risk * 100).toFixed(0)}%</p>
               </div>
                 <div
-                  className={`rounded-md bg-muted p-3 ${
+                  className={`rounded-md bg-muted p-3 text-black ${
                     selectedStat === "vegetation_stress" ? "ring-2 ring-blue-500" : ""
                   }`}
                 >
-                <p className="text-muted-foreground">Vegetation stress</p>
-                <p className="text-lg font-semibold">{(scores.vegetation_stress * 100).toFixed(0)}%</p>
+                <p className="text-black">Vegetation stress</p>
+                <p className="text-lg font-semibold text-black">{(scores.vegetation_stress * 100).toFixed(0)}%</p>
               </div>
                 <div
-                  className={`rounded-md bg-muted p-3 ${
+                  className={`rounded-md bg-muted p-3 text-black ${
                     selectedStat === "air_quality_proxy" ? "ring-2 ring-blue-500" : ""
                   }`}
                 >
-                <p className="text-muted-foreground">Air quality proxy</p>
-                <p className="text-lg font-semibold">{(scores.air_quality_proxy * 100).toFixed(0)}%</p>
+                <p className="text-black">Air quality proxy</p>
+                <p className="text-lg font-semibold text-black">{(scores.air_quality_proxy * 100).toFixed(0)}%</p>
               </div>
               </div>
             </>
           )}
 
           {summary && (
-            <p className="mt-3 text-xs text-muted-foreground">{summary}</p>
+            <p className="mt-3 text-xs text-black">{summary}</p>
           )}
 
           {history && history.length > 0 && (
@@ -276,12 +276,12 @@ export default function Climate() {
                 <table className="min-w-full text-[11px] md:text-xs">
                   <thead className="bg-muted/60">
                     <tr>
-                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Year</th>
-                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Overall</th>
-                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Heat</th>
-                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Flood</th>
-                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Vegetation</th>
-                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Air quality</th>
+                      <th className="px-3 py-2 text-left font-medium text-black">Year</th>
+                      <th className="px-3 py-2 text-left font-medium text-black">Overall</th>
+                      <th className="px-3 py-2 text-left font-medium text-black">Heat</th>
+                      <th className="px-3 py-2 text-left font-medium text-black">Flood</th>
+                      <th className="px-3 py-2 text-left font-medium text-black">Vegetation</th>
+                      <th className="px-3 py-2 text-left font-medium text-black">Air quality</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -289,7 +289,7 @@ export default function Climate() {
                       .slice()
                       .sort((a, b) => a.year - b.year)
                       .map((entry) => (
-                        <tr key={entry.year} className="odd:bg-background even:bg-muted/30">
+                        <tr key={entry.year} className="odd:bg-background even:bg-muted/30 text-black">
                           <td className="px-3 py-1.5 font-medium">{entry.year}</td>
                           <td className="px-3 py-1.5">
                             {(entry.scores.overall_risk * 100).toFixed(0)}%

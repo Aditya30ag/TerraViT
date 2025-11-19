@@ -102,7 +102,7 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
               </button>
               <button 
                 onClick={() => router.push('/test')}
-                className="bg-blue-600 hover:bg-blue-700 text-white py-2.5 px-5 text-sm rounded-xl capitalize font-medium transition-colors flex items-center gap-2"
+                className="bg-gray-600 hover:bg-gray-700 text-white py-2.5 px-5 text-sm rounded-xl capitalize font-medium transition-colors flex items-center gap-2 text-black"
               >
                 <TestTube className="h-4 w-4" />
                 Test Backend

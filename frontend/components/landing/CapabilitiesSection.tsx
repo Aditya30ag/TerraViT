@@ -9,7 +9,7 @@ const CapabilitiesSection: React.FC = () => {
             What TerraViT sees
           </h2>
           <p className="mt-1 text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
-            High-resolution views into Earths hidden climate signals.
+            High-resolution views into Earth's hidden climate signals.
           </p>
         </div>
       </div>
