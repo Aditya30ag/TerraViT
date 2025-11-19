@@ -46,3 +46,12 @@ class ClimateRiskHistoryResponse(BaseModel):
     lat: float
     lon: float
     years: List[ClimateRiskHistoryYear]
+
+
+class ChangeDetectResponse(BaseModel):
+    change_score: float
+    class_scores_before: Optional[List[float]] = None
+    class_scores_after: Optional[List[float]] = None
+    per_class_change: Optional[List[float]] = None
+    dominant_change_class_index: Optional[int] = None
+    summary: str

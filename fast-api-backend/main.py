@@ -14,6 +14,7 @@ from schemas import (
     ClimateRiskScores,
     ClimateRiskHistoryYear,
     ClimateRiskHistoryResponse,
+    ChangeDetectResponse,
 )
 from terravit_model import terravit_model
 
@@ -220,6 +221,76 @@ async def climate_risk_history(payload: ClimateRiskRequest) -> ClimateRiskHistor
         lon=payload.lon,
         years=history_years,
     )
+
+
+@app.post("/change/detect", response_model=ChangeDetectResponse)
+async def change_detect(
+    before: UploadFile = File(...),
+    after: UploadFile = File(...),
+) -> ChangeDetectResponse:
+    """Detect change between two satellite images using TerraViT logits difference.
+
+    This V1 implementation:
+    - runs TerraViT on both images,
+    - computes softmax probabilities for each,
+    - defines a change score as the mean absolute difference across classes,
+    - returns per-class change vector and a brief summary.
+    """
+
+    for f, name in ((before, "before"), (after, "after")):
+        if f.content_type is None or not f.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail=f"Uploaded {name} file must be an image.")
+
+    try:
+        before_bytes = await before.read()
+        after_bytes = await after.read()
+        before_img = Image.open(io.BytesIO(before_bytes))
+        after_img = Image.open(io.BytesIO(after_bytes))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="Could not read one or both image files.") from exc
+
+    if not terravit_model.is_loaded:
+        try:
+            terravit_model.load()
+        except RuntimeError as exc:  # noqa: TRY003
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    import torch
+
+    try:
+        # Use the same image->logits pathway as generic prediction
+        before_logits = terravit_model._image_logits(before_img)  # type: ignore[attr-defined]
+        after_logits = terravit_model._image_logits(after_img)  # type: ignore[attr-defined]
+
+        before_probs = torch.softmax(before_logits, dim=0)
+        after_probs = torch.softmax(after_logits, dim=0)
+
+        per_class_change = (after_probs - before_probs).tolist()
+        change_score = torch.mean(torch.abs(after_probs - before_probs)).item()
+
+        if len(per_class_change) > 0:
+            diffs_abs = torch.abs(after_probs - before_probs)
+            dominant_idx = int(torch.argmax(diffs_abs).item())
+        else:
+            dominant_idx = None
+
+        summary = (
+            f"Change score: {change_score:.3f}. "
+            "Positive per_class_change values indicate classes that increased in probability from before to after."
+        )
+
+        return ChangeDetectResponse(
+            change_score=change_score,
+            class_scores_before=before_probs.tolist(),
+            class_scores_after=after_probs.tolist(),
+            per_class_change=per_class_change,
+            dominant_change_class_index=dominant_idx,
+            summary=summary,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Change detection failed: {exc}") from exc
 
 
 # Root endpoint for quick verification
