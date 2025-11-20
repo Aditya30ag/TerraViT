@@ -100,13 +100,6 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
               <button className="text-foreground hover:text-muted-foreground cursor-pointer py-2 px-4 text-sm capitalize font-medium transition-colors rounded-xl">
                 View demo
               </button>
-              <button 
-                onClick={() => router.push('/test')}
-                className="bg-gray-600 hover:bg-gray-700 text-white py-2.5 px-5 text-sm rounded-xl capitalize font-medium transition-colors flex items-center gap-2 text-black"
-              >
-                <TestTube className="h-4 w-4" />
-                Test Backend
-              </button>
               <a
                 href="#contact"
                 className="bg-foreground hover:bg-muted-foreground text-background py-2.5 px-5 text-sm rounded-xl capitalize font-medium transition-colors flex items-center gap-2"
