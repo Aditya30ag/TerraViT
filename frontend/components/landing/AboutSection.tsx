@@ -16,7 +16,7 @@ const AboutSection: React.FC = () => {
         <p className="text-base md:text-lg text-white leading-relaxed">
           Built on Vision Transformers tuned for multi-spectral, multi-temporal Earth data,
           TerraViT continuously scans the globe to surface stress signals in vegetation,
-          water, heat, and air qualityweeks or months before they translate into human
+          water, heat, and air quality weeks or months before they translate into human
           impact.
         </p>
       </div>
