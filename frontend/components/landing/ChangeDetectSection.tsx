@@ -164,17 +164,6 @@ export default function ChangeDetectSection() {
         {result && (
           <div className="mt-10 space-y-8">
 
-            {/* CHANGE SCORE PANEL */}
-            <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-6 shadow-xl">
-              <p className="text-slate-300 text-sm mb-1">Change Score</p>
-
-              <p className="text-4xl font-bold text-white mb-2">
-                {(result.change_score * 100).toFixed(1)}%
-              </p>
-
-              <p className="text-[12px] text-slate-400">{result.summary}</p>
-            </div>
-
             {/* LINE CHART (GLASS) */}
             {result.class_scores_before &&
               result.class_scores_after &&

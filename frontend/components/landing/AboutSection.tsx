@@ -20,21 +20,6 @@ const AboutSection: React.FC = () => {
           impact.
         </p>
       </div>
-      <div className="rounded-2xl border border-border bg-card/80 backdrop-blur p-4 md:p-5 space-y-3">
-        <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-          Trusted by
-        </p>
-        <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
-          <div className="space-y-1">
-            <p className="font-semibold text-foreground">Research labs</p>
-            <p>Planetary-scale climate modeling, resilient cities, and adaptation.</p>
-          </div>
-          <div className="space-y-1">
-            <p className="font-semibold text-foreground">Sustainability teams</p>
-            <p>ESG, nature risk, and climate disclosures grounded in geospatial truth.</p>
-          </div>
-        </div>
-      </div>
     </section>
   );
 };
