@@ -293,6 +293,201 @@ async def change_detect(
         raise HTTPException(status_code=500, detail=f"Change detection failed: {exc}") from exc
 
 
+# -------------------------
+# Alerts & Early Warning
+# -------------------------
+import uuid
+import asyncio
+import json
+import os
+import re
+from typing import Any
+
+from schemas import AlertCreate, Alert, RegisterLocationRequest
+
+
+# In-memory alert store (prototype) and broadcast queue for SSE
+_alerts: list[Alert] = []
+_alert_queue: "asyncio.Queue[dict]" = asyncio.Queue()
+_registered_locations: dict[str, dict[str, Any]] = {}
+_monitor_task: asyncio.Task | None = None
+
+ALERT_WEBHOOK_URL = os.getenv("ALERT_WEBHOOK_URL")
+ALERT_POLL_SECONDS = int(os.getenv("ALERT_POLL_SECONDS", "60"))
+
+
+async def dispatch_alert(alert: dict) -> None:
+    """Dispatch alert to external webhook and other channels (best-effort)."""
+    if ALERT_WEBHOOK_URL:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                await client.post(ALERT_WEBHOOK_URL, json=alert)
+        except Exception:
+            # best-effort: don't raise
+            pass
+
+
+@app.post("/alerts", response_model=Alert)
+async def create_alert(payload: AlertCreate) -> Alert:
+    """Create a new alert (manual or automated)."""
+    alert_id = str(uuid.uuid4())
+    alert = Alert(id=alert_id, **payload.dict())
+
+    # store and broadcast
+    _alerts.insert(0, alert)
+    await _alert_queue.put(alert.dict())
+
+    # dispatch webhooks in background
+    asyncio.create_task(dispatch_alert(alert.dict()))
+
+    return alert
+
+
+@app.get("/alerts", response_model=list[Alert])
+async def list_alerts() -> list[Alert]:
+    return _alerts
+
+
+@app.post("/alerts/simulate", response_model=Alert)
+async def simulate_alert(lat: float, lon: float, alert_type: str = "flood", score: float = 0.9) -> Alert:
+    """Simulate an alert for testing/demo purposes."""
+    payload = AlertCreate(lat=lat, lon=lon, alert_type=alert_type, score=score)
+    return await create_alert(payload)
+
+
+@app.post("/alerts/from_image", response_model=Alert)
+async def alert_from_image(lat: float, lon: float, file: UploadFile = File(...), alert_type: str = "anomaly", threshold: float = 0.7) -> Alert:
+    """Run TerraViT on an uploaded image and optionally create an alert when the prediction is confident.
+
+    This is a simple bridge for image-based detections: it uses the model's top_class_score
+    as a proxy for confidence. If score >= threshold, an alert is created.
+    """
+    if file.content_type is None or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Uploaded file must be an image.")
+
+    try:
+        image_bytes = await file.read()
+        image = Image.open(io.BytesIO(image_bytes))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="Could not read image file.") from exc
+
+    if not terravit_model.is_loaded:
+        terravit_model.load()
+
+    result = terravit_model.predict(image)
+
+    score = float(result.get("top_class_score", 0.0) or 0.0)
+
+    if score >= float(threshold):
+        payload = AlertCreate(lat=lat, lon=lon, alert_type=alert_type, score=score)
+        return await create_alert(payload)
+
+    # Not confident enough to create an alert; return a 204 with no content by convention
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(status_code=204, content={})
+
+
+@app.get("/alerts/stream")
+async def alerts_stream():
+    """Server-Sent Events (SSE) stream of alerts. Connect with EventSource from clients."""
+
+    async def event_generator():
+        while True:
+            data = await _alert_queue.get()
+
+            # Normalize timestamp into an ISO string with explicit timezone (UTC 'Z')
+            # so clients interpret the moment correctly in their local timezone.
+            if isinstance(data, dict):
+                payload = dict(data)
+            else:
+                payload = dict(data)
+
+            ts = payload.get("timestamp")
+
+            # If timestamp is a string but lacks timezone info, append Z to mark UTC
+            if isinstance(ts, str):
+                if "Z" not in ts and not re.search(r"[+-]\d\d:\d\d$", ts):
+                    payload["timestamp"] = ts + "Z"
+            else:
+                # datetime-like object -> convert to UTC ISO and use 'Z' suffix
+                if hasattr(ts, "astimezone"):
+                    from datetime import timezone as _tz
+
+                    payload["timestamp"] = ts.astimezone(_tz.utc).isoformat().replace("+00:00", "Z")
+                elif hasattr(ts, "isoformat"):
+                    payload["timestamp"] = ts.isoformat()
+
+            yield f"data: {json.dumps(payload)}\n\n"
+
+    from fastapi.responses import StreamingResponse
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@app.post("/alerts/register_location")
+async def register_location(payload: RegisterLocationRequest) -> dict:
+    """Register a location to be polled for automatic alerts.
+
+    Accepts a JSON body with `lat`, `lon`, optional `id` and `alert_threshold`.
+    Returns the registration id.
+    """
+    reg_id = payload.id or str(uuid.uuid4())
+    _registered_locations[reg_id] = {"lat": float(payload.lat), "lon": float(payload.lon), "threshold": float(payload.alert_threshold)}
+
+    global _monitor_task
+    if _monitor_task is None:
+        _monitor_task = asyncio.create_task(_monitor_registered_locations())
+
+    return {"id": reg_id}
+
+
+async def _monitor_registered_locations() -> None:
+    from schemas import ClimateRiskRequest
+
+    while True:
+        try:
+            if not _registered_locations:
+                await asyncio.sleep(ALERT_POLL_SECONDS)
+                continue
+
+            tasks = []
+            for reg_id, info in list(_registered_locations.items()):
+                req = ClimateRiskRequest(lat=info["lat"], lon=info["lon"])
+                tasks.append((reg_id, asyncio.create_task(climate_risk_score(req))))
+
+            for reg_id, t in tasks:
+                try:
+                    resp = await t
+                except Exception:
+                    continue
+
+                # Simple policy: create a flood alert when flood_risk > threshold,
+                # create a fire alert when heat_risk and vegetation_stress combine > threshold.
+                thr = _registered_locations.get(reg_id, {}).get("threshold", 0.7)
+                scores = resp.scores
+
+                if scores.flood_risk >= thr:
+                    payload = AlertCreate(lat=resp.lat, lon=resp.lon, alert_type="flood", score=scores.flood_risk)
+                    await create_alert(payload)
+
+                if (scores.heat_risk * 0.6 + scores.vegetation_stress * 0.4) >= thr:
+                    heat_score = float(scores.heat_risk * 0.6 + scores.vegetation_stress * 0.4)
+                    payload = AlertCreate(lat=resp.lat, lon=resp.lon, alert_type="fire", score=heat_score)
+                    await create_alert(payload)
+
+                # Log each registration check explicitly for easier debugging
+                print(
+                    f"[RISK] reg={reg_id} lat={resp.lat}, lon={resp.lon}, flood={scores.flood_risk}, heat={scores.heat_risk}, veg={scores.vegetation_stress}"
+                )
+
+        except Exception:
+            # swallow to keep background task alive
+            pass
+
+        await asyncio.sleep(ALERT_POLL_SECONDS)
+
+
 # Root endpoint for quick verification
 @app.get("/")
 async def root() -> Dict[str, str]:

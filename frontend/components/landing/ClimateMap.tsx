@@ -26,7 +26,6 @@ const ClimateMap: React.FC<ClimateMapProps> = ({
   lon,
   setLat,
   setLon,
-  selectedLocation,
   setSelectedLocation,
   STATIC_LOCATIONS,
 }) => {

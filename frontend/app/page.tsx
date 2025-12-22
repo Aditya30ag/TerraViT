@@ -7,7 +7,6 @@ import UseCasesSection from "@/components/landing/UseCasesSection";
 import ContactSection from "@/components/landing/ContactSection";
 import { useState } from "react";
 import ClimateFeatureSection from "@/components/landing/ClimateFeatureSection";
-import ChangeDetectSection from "@/components/landing/ChangeDetectSection";
 
 export default function Home() {
   const [email, setEmail] = useState("");
@@ -29,7 +28,6 @@ export default function Home() {
         <ClimateFeatureSection/>
         <HowItWorksSection />
         <UseCasesSection />
-        <ChangeDetectSection/>
         <ContactSection
           email={email}
           setEmail={setEmail}

@@ -55,3 +55,37 @@ class ChangeDetectResponse(BaseModel):
     per_class_change: Optional[List[float]] = None
     dominant_change_class_index: Optional[int] = None
     summary: str
+
+
+# -------------------------
+# Alerts / Early warning
+# -------------------------
+from datetime import datetime, timezone
+from typing import Any
+from pydantic import Field
+
+
+class AlertBase(BaseModel):
+    lat: float
+    lon: float
+    alert_type: str  # e.g. "flood", "fire", "heatwave"
+    score: float
+    source: str = "automated"
+    metadata: Optional[dict[str, Any]] = None
+
+
+class AlertCreate(AlertBase):
+    pass
+
+
+class Alert(AlertBase):
+    id: str
+    # Use timezone-aware UTC timestamps so frontend parses times reliably
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class RegisterLocationRequest(BaseModel):
+    id: Optional[str] = None
+    lat: float
+    lon: float
+    alert_threshold: float = 0.7

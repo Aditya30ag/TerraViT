@@ -59,3 +59,26 @@ Accepts a satellite image file (`multipart/form-data`, field name `file`) and re
 ```
 
 You can adapt `terravit_model.py` to match your exact TerraViT head (classification, regression, multi-task, explanations, etc.).
+
+## Alerts & Early Warning (new)
+
+This backend includes a minimal prototype for alerts and early warnings. It stores alerts in-memory and exposes a Server-Sent Events (SSE) stream for real-time delivery to clients.
+
+Environment variables:
+
+- `ALERT_WEBHOOK_URL` — optional webhook URL to POST alerts to when created (best-effort delivery)
+- `ALERT_POLL_SECONDS` — how often registered locations are polled for risk (default: 60)
+
+Endpoints:
+
+- `GET /alerts` — list recent alerts
+- `POST /alerts` — create an alert (payload: `AlertCreate`)
+- `POST /alerts/simulate` — convenience endpoint to simulate an alert
+- `POST /alerts/from_image` — upload an image and (optionally) create an alert if the model is confident
+- `GET /alerts/stream` — SSE stream for live alerts (connect with `EventSource`)
+- `POST /alerts/register_location` — register a lat/lon to be monitored periodically (query or JSON: `lat`, `lon`, `alert_threshold`)
+
+Notes:
+
+- The current implementation is intentionally simple and in-memory for demo purposes. For production use, persist alerts to a database (Postgres, DynamoDB), add robust retry/outbox for webhook/email delivery, secure endpoints, and add auth.
+- The monitoring policy is simple: flood alerts are triggered when the climate flood risk exceeds the registered threshold; fire alerts are triggered when a weighted heat + vegetation stress score exceeds the threshold.
