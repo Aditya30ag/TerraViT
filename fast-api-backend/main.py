@@ -5,6 +5,8 @@ from datetime import datetime
 from PIL import Image
 import io
 import httpx
+import base64
+import numpy as np
 
 from schemas import (
     PredictionResponse,
@@ -15,6 +17,7 @@ from schemas import (
     ClimateRiskHistoryYear,
     ClimateRiskHistoryResponse,
     ChangeDetectResponse,
+    OverlayResponse,
 )
 from terravit_model import terravit_model
 
@@ -293,9 +296,144 @@ async def change_detect(
         raise HTTPException(status_code=500, detail=f"Change detection failed: {exc}") from exc
 
 
+@app.post("/change/overlay", response_model=OverlayResponse)
+async def change_overlay(
+    before: UploadFile = File(...),
+    after: UploadFile = File(...),
+) -> OverlayResponse:
+    """Return visual overlays (heatmap + heuristic masks) for before/after images.
+
+    Overlays are returned as base64-encoded PNG strings (no data URI prefix).
+    """
+    for f, name in ((before, "before"), (after, "after")):
+        if f.content_type is None or not f.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail=f"Uploaded {name} file must be an image.")
+
+    try:
+        before_bytes = await before.read()
+        after_bytes = await after.read()
+        before_img = Image.open(io.BytesIO(before_bytes)).convert("RGB")
+        after_img = Image.open(io.BytesIO(after_bytes)).convert("RGB")
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="Could not read one or both image files.") from exc
+
+    if not terravit_model.is_loaded:
+        terravit_model.load()
+
+    try:
+        # Get per-patch decoder predictions
+        before_pred = terravit_model.image_patch_preds(before_img)  # [L, io_dim]
+        after_pred = terravit_model.image_patch_preds(after_img)
+
+        import torch as _torch
+
+        diffs = _torch.norm(after_pred - before_pred, dim=1).cpu().numpy()  # (L,)
+
+        L = diffs.shape[0]
+        grid_size = int(L ** 0.5)
+        if grid_size * grid_size != L:
+            # fallback to square grid assumption
+            grid_size = int(round(L ** 0.5))
+
+        heat_grid = diffs.reshape(grid_size, grid_size)
+
+        # Normalize to 0-1
+        minv = float(heat_grid.min())
+        maxv = float(heat_grid.max())
+        rng = maxv - minv if maxv > minv else 1.0
+        norm = (heat_grid - minv) / rng
+
+        # Create simple red-yellow heatmap RGB
+        heat_rgb = np.zeros((grid_size, grid_size, 3), dtype=np.uint8)
+        heat_rgb[..., 0] = (255 * norm).astype(np.uint8)  # R
+        heat_rgb[..., 1] = (255 * (norm ** 0.5)).astype(np.uint8)  # G
+        heat_rgb[..., 2] = 0
+
+        patch_hw = terravit_model._patch_hw or 8
+        side = patch_hw * grid_size
+
+        heat_img = Image.fromarray(heat_rgb).resize((side, side), resample=Image.BILINEAR)
+
+        # Heuristic masks using RGB proxies
+        b_before = np.asarray(before_img.resize((side, side))).astype(np.float32) / 255.0
+        b_after = np.asarray(after_img.resize((side, side))).astype(np.float32) / 255.0
+
+        # Green index proxy (vegetation)
+        gi_b = b_before[..., 1] - 0.5 * (b_before[..., 0] + b_before[..., 2])
+        gi_a = b_after[..., 1] - 0.5 * (b_after[..., 0] + b_after[..., 2])
+
+        # Water proxy (blue dominance minus brightness)
+        wi_b = b_before[..., 2] - 0.5 * (b_before[..., 0] + b_before[..., 1])
+        wi_a = b_after[..., 2] - 0.5 * (b_after[..., 0] + b_after[..., 1])
+
+        # Aggregate to patch-level
+        gi_b_p = gi_b.reshape(grid_size, patch_hw, grid_size, patch_hw).mean(axis=(1,3))
+        gi_a_p = gi_a.reshape(grid_size, patch_hw, grid_size, patch_hw).mean(axis=(1,3))
+        wi_b_p = wi_b.reshape(grid_size, patch_hw, grid_size, patch_hw).mean(axis=(1,3))
+        wi_a_p = wi_a.reshape(grid_size, patch_hw, grid_size, patch_hw).mean(axis=(1,3))
+
+        veg_delta = gi_b_p - gi_a_p  # positive => loss
+        water_delta = wi_a_p - wi_b_p  # positive => more water
+
+        veg_mask_patch = veg_delta > 0.07
+        water_mask_patch = water_delta > 0.05
+
+        def patch_mask_to_png_b64(mask_patch: np.ndarray, color=(0, 255, 0), outline=False):
+            # Upscale to side
+            mask_u = np.kron(mask_patch.astype(np.uint8), np.ones((patch_hw, patch_hw), dtype=np.uint8))
+            # Create RGBA
+            rgba = np.zeros((side, side, 4), dtype=np.uint8)
+            if outline:
+                # simple 4-neighbor erosion at patch level
+                eroded = np.zeros_like(mask_patch, dtype=bool)
+                h, w = mask_patch.shape
+                for i in range(h):
+                    for j in range(w):
+                        if not mask_patch[i, j]:
+                            continue
+                        neighbors = True
+                        for di, dj in ((-1,0),(1,0),(0,-1),(0,1)):
+                            ni, nj = i + di, j + dj
+                            if ni < 0 or nj < 0 or ni >= h or nj >= w or (not mask_patch[ni, nj]):
+                                neighbors = False
+                                break
+                        eroded[i, j] = neighbors
+                boundary = mask_patch & (~eroded)
+                boundary_u = np.kron(boundary.astype(np.uint8), np.ones((patch_hw, patch_hw), dtype=np.uint8))
+                rgba[..., :3] = 0
+                rgba[..., :3] += np.array(color, dtype=np.uint8).reshape((1,1,3))
+                rgba[..., 3] = (boundary_u * 255).astype(np.uint8)
+            else:
+                rgba[..., :3] = np.array(color, dtype=np.uint8).reshape((1,1,3))
+                rgba[..., 3] = (mask_u * 120).astype(np.uint8)  # semi-transparent fill
+            pil = Image.fromarray(rgba, mode="RGBA")
+            bio = io.BytesIO()
+            pil.save(bio, format="PNG")
+            return base64.b64encode(bio.getvalue()).decode("ascii")
+
+        veg_png = patch_mask_to_png_b64(veg_mask_patch, color=(0,255,0), outline=False)
+        water_png = patch_mask_to_png_b64(water_mask_patch, color=(0,150,255), outline=False)
+
+        # Heatmap PNG
+        bio = io.BytesIO()
+        heat_img.save(bio, format="PNG")
+        heat_b64 = base64.b64encode(bio.getvalue()).decode("ascii")
+
+        # Return overlays
+        return OverlayResponse(
+            heatmap_png_base64=heat_b64,
+            vegetation_mask_png_base64=veg_png,
+            flood_mask_png_base64=water_png,
+            heatmap_values=diffs.tolist(),
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Overlay generation failed: {exc}") from exc
+
+
 # -------------------------
 # Alerts & Early Warning
-# -------------------------
 import uuid
 import asyncio
 import json

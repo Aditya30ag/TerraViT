@@ -57,6 +57,19 @@ class ChangeDetectResponse(BaseModel):
     summary: str
 
 
+class OverlayResponse(BaseModel):
+    """Prototype overlay response returning heatmap and heuristic masks as base64 PNGs.
+
+    The strings are plain base64-encoded PNG bytes (frontend should prefix with
+    `data:image/png;base64,` when using as image src).
+    """
+    heatmap_png_base64: str
+    vegetation_mask_png_base64: str
+    flood_mask_png_base64: str
+    # Optional: flattened per-patch values (for debugging / charts)
+    heatmap_values: Optional[List[float]] = None
+
+
 # -------------------------
 # Alerts / Early warning
 # -------------------------

@@ -163,6 +163,23 @@ class TerraViTModel:
         logits = pred.mean(dim=1).view(-1)
         return logits
 
+    def image_patch_preds(self, image: Image.Image) -> "torch.Tensor":
+        """Return decoder predictions per patch as a [num_patches, io_dim] tensor.
+
+        This exposes the MAE decoder predictions for each patch (before averaging)
+        so callers can produce per-patch heatmaps and masks.
+        """
+        if self._model is None:
+            self.load()
+
+        patches = self._image_to_patches(image)
+
+        with torch.no_grad():
+            loss, pred, mask = self._model(patches, mask_ratio=0.0)
+
+        # pred: [1, num_patches, io_dim]
+        return pred.squeeze(0)  # -> [num_patches, io_dim]
+
     def predict(self, image: Image.Image) -> Dict[str, Any]:
         """Run inference and return a generic prediction dictionary.
 

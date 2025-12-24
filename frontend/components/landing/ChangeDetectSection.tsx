@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import ChangeLineChart from "@/components/landing/ChangeLineChart";
+import MarkDiffByOutline from "@/components/landing/MarkDiffByOutline";
 
 const API_BASE_URL = "http://localhost:8000";
 
@@ -21,6 +22,8 @@ export default function ChangeDetectSection() {
     dominant_change_class_index?: number | null;
     summary: string;
   } | null>(null);
+
+  const [overlays, setOverlays] = useState<{heatmap?: string | null; vegetation?: string | null; flood?: string | null} | null>(null);
 
   const handleSubmit = async () => {
     setError("");
@@ -50,6 +53,24 @@ export default function ChangeDetectSection() {
 
       const data = await resp.json();
       setResult(data);
+
+      // Fetch overlays (heatmap and heuristic masks)
+      try {
+        const resp2 = await fetch(`${API_BASE_URL}/change/overlay`, {
+          method: "POST",
+          body: formData,
+        });
+        if (resp2.ok) {
+          const overlaysJson = await resp2.json();
+          setOverlays({
+            heatmap: overlaysJson.heatmap_png_base64 ? `data:image/png;base64,${overlaysJson.heatmap_png_base64}` : null,
+            vegetation: overlaysJson.vegetation_mask_png_base64 ? `data:image/png;base64,${overlaysJson.vegetation_mask_png_base64}` : null,
+            flood: overlaysJson.flood_mask_png_base64 ? `data:image/png;base64,${overlaysJson.flood_mask_png_base64}` : null,
+          });
+        }
+      } catch {
+        // ignore overlay errors
+      }
     } catch (e) {
       setError("Unable to reach TerraViT backend. Is it running on port 8000?");
     } finally {
@@ -206,7 +227,7 @@ export default function ChangeDetectSection() {
 
             {/* PER-CLASS TABLE */}
             {result.per_class_change && (
-              <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-6 shadow-xl overflow-x-auto">
+              <div className="h-150 backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-6 shadow-xl overflow-x-auto overflow-y-auto">
                 <p className="text-sm font-semibold text-white mb-3">
                   Per-Class Probability Change
                 </p>
@@ -238,6 +259,20 @@ export default function ChangeDetectSection() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {/* OVERLAYS */}
+            {overlays && beforeFile && afterFile && (
+              <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-6 shadow-xl overflow-x-auto">
+                <p className="text-sm font-semibold text-white mb-3">Change Overlays</p>
+                <MarkDiffByOutline
+                  beforeSrc={beforeFile ? URL.createObjectURL(beforeFile) : ""}
+                  afterSrc={afterFile ? URL.createObjectURL(afterFile) : ""}
+                  heatmapSrc={overlays.heatmap || undefined}
+                  vegetationSrc={overlays.vegetation || undefined}
+                  floodSrc={overlays.flood || undefined}
+                />
               </div>
             )}
 
