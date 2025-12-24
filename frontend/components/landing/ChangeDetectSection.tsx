@@ -23,7 +23,7 @@ export default function ChangeDetectSection() {
     summary: string;
   } | null>(null);
 
-  const [overlays, setOverlays] = useState<{heatmap?: string | null; vegetation?: string | null; flood?: string | null} | null>(null);
+  const [overlays, setOverlays] = useState<{heatmap?: string | null; vegetation?: string | null; flood?: string | null; vegetationOutline?: string | null; floodOutline?: string | null} | null>(null);
 
   const handleSubmit = async () => {
     setError("");
@@ -66,6 +66,8 @@ export default function ChangeDetectSection() {
             heatmap: overlaysJson.heatmap_png_base64 ? `data:image/png;base64,${overlaysJson.heatmap_png_base64}` : null,
             vegetation: overlaysJson.vegetation_mask_png_base64 ? `data:image/png;base64,${overlaysJson.vegetation_mask_png_base64}` : null,
             flood: overlaysJson.flood_mask_png_base64 ? `data:image/png;base64,${overlaysJson.flood_mask_png_base64}` : null,
+            vegetationOutline: overlaysJson.vegetation_mask_outline_png_base64 ? `data:image/png;base64,${overlaysJson.vegetation_mask_outline_png_base64}` : null,
+            floodOutline: overlaysJson.flood_mask_outline_png_base64 ? `data:image/png;base64,${overlaysJson.flood_mask_outline_png_base64}` : null,
           });
         }
       } catch {
@@ -272,6 +274,8 @@ export default function ChangeDetectSection() {
                   heatmapSrc={overlays.heatmap || undefined}
                   vegetationSrc={overlays.vegetation || undefined}
                   floodSrc={overlays.flood || undefined}
+                  vegetationOutlineSrc={overlays.vegetationOutline || undefined}
+                  floodOutlineSrc={overlays.floodOutline || undefined}
                 />
               </div>
             )}

@@ -65,7 +65,9 @@ class OverlayResponse(BaseModel):
     """
     heatmap_png_base64: str
     vegetation_mask_png_base64: str
+    vegetation_mask_outline_png_base64: Optional[str] = None
     flood_mask_png_base64: str
+    flood_mask_outline_png_base64: Optional[str] = None
     # Optional: flattened per-patch values (for debugging / charts)
     heatmap_values: Optional[List[float]] = None
 

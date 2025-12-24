@@ -337,82 +337,134 @@ async def change_overlay(
 
         heat_grid = diffs.reshape(grid_size, grid_size)
 
-        # Normalize to 0-1
-        minv = float(heat_grid.min())
-        maxv = float(heat_grid.max())
-        rng = maxv - minv if maxv > minv else 1.0
-        norm = (heat_grid - minv) / rng
+        # Better normalization: clip extremes using percentiles then normalize
+        flat = diffs.flatten()
+        vmin = float(np.percentile(flat, 1))
+        vmax = float(np.percentile(flat, 99))
+        rng = max(vmax - vmin, 1e-6)
+        norm = np.clip((heat_grid - vmin) / rng, 0.0, 1.0)
 
-        # Create simple red-yellow heatmap RGB
+        # Simple smoothing (3x3 average) on patch grid to reduce noise
+        k = np.array([[1,1,1],[1,1,1],[1,1,1]], dtype=float) / 9.0
+        # pad and convolve via simple sums (small kernels are fine)
+        padded = np.pad(norm, 1, mode="edge")
+        smooth = (
+            padded[:-2, :-2] * k[0,0] + padded[:-2,1:-1] * k[0,1] + padded[:-2,2:] * k[0,2] +
+            padded[1:-1, :-2] * k[1,0] + padded[1:-1,1:-1] * k[1,1] + padded[1:-1,2:] * k[1,2] +
+            padded[2:, :-2] * k[2,0] + padded[2:,1:-1] * k[2,1] + padded[2:,2:] * k[2,2]
+        )
+
+        heat_norm = np.clip(smooth, 0.0, 1.0)
+
+        # Create colorized heatmap (red -> yellow)
         heat_rgb = np.zeros((grid_size, grid_size, 3), dtype=np.uint8)
-        heat_rgb[..., 0] = (255 * norm).astype(np.uint8)  # R
-        heat_rgb[..., 1] = (255 * (norm ** 0.5)).astype(np.uint8)  # G
-        heat_rgb[..., 2] = 0
+        heat_rgb[..., 0] = (255 * heat_norm).astype(np.uint8)  # R
+        heat_rgb[..., 1] = (200 * (heat_norm ** 0.6)).astype(np.uint8)  # G
+        heat_rgb[..., 2] = 30
 
         patch_hw = terravit_model._patch_hw or 8
         side = patch_hw * grid_size
 
+        # Upscale and blur by resizing (gives smoother visual)
         heat_img = Image.fromarray(heat_rgb).resize((side, side), resample=Image.BILINEAR)
 
-        # Heuristic masks using RGB proxies
+        # Heuristic indices using RGB proxies (improved)
         b_before = np.asarray(before_img.resize((side, side))).astype(np.float32) / 255.0
         b_after = np.asarray(after_img.resize((side, side))).astype(np.float32) / 255.0
 
-        # Green index proxy (vegetation)
-        gi_b = b_before[..., 1] - 0.5 * (b_before[..., 0] + b_before[..., 2])
-        gi_a = b_after[..., 1] - 0.5 * (b_after[..., 0] + b_after[..., 2])
+        Rb, Gb, Bb = b_before[..., 0], b_before[..., 1], b_before[..., 2]
+        Ra, Ga, Ba = b_after[..., 0], b_after[..., 1], b_after[..., 2]
 
-        # Water proxy (blue dominance minus brightness)
-        wi_b = b_before[..., 2] - 0.5 * (b_before[..., 0] + b_before[..., 1])
-        wi_a = b_after[..., 2] - 0.5 * (b_after[..., 0] + b_after[..., 1])
+        # Excess Green (ExG) proxy: 2G - R - B
+        exg_b = 2 * Gb - Rb - Bb
+        exg_a = 2 * Ga - Ra - Ba
+        exg_delta = exg_b - exg_a  # positive => vegetation loss
 
-        # Aggregate to patch-level
-        gi_b_p = gi_b.reshape(grid_size, patch_hw, grid_size, patch_hw).mean(axis=(1,3))
-        gi_a_p = gi_a.reshape(grid_size, patch_hw, grid_size, patch_hw).mean(axis=(1,3))
-        wi_b_p = wi_b.reshape(grid_size, patch_hw, grid_size, patch_hw).mean(axis=(1,3))
-        wi_a_p = wi_a.reshape(grid_size, patch_hw, grid_size, patch_hw).mean(axis=(1,3))
+        # NDWI-like proxy (green-blue ratio): (G - R) / (G + R) approx water sensitivity
+        ndwi_b = (Gb - Rb) / (np.clip(Gb + Rb, 1e-6, None))
+        ndwi_a = (Ga - Ra) / (np.clip(Ga + Ra, 1e-6, None))
+        water_delta = ndwi_a - ndwi_b  # positive => more water
 
-        veg_delta = gi_b_p - gi_a_p  # positive => loss
-        water_delta = wi_a_p - wi_b_p  # positive => more water
+        # Aggregate to patch-level using block mean
+        def patch_mean(arr):
+            h, w = arr.shape
+            arr = arr.reshape(grid_size, patch_hw, grid_size, patch_hw).mean(axis=(1, 3))
+            return arr
 
-        veg_mask_patch = veg_delta > 0.07
-        water_mask_patch = water_delta > 0.05
+        exg_b_p = patch_mean(exg_b)
+        exg_a_p = patch_mean(exg_a)
+        ndwi_b_p = patch_mean(ndwi_b)
+        ndwi_a_p = patch_mean(ndwi_a)
 
-        def patch_mask_to_png_b64(mask_patch: np.ndarray, color=(0, 255, 0), outline=False):
-            # Upscale to side
-            mask_u = np.kron(mask_patch.astype(np.uint8), np.ones((patch_hw, patch_hw), dtype=np.uint8))
-            # Create RGBA
+        veg_delta = exg_b_p - exg_a_p
+        water_delta_p = ndwi_a_p - ndwi_b_p
+
+        # Adaptive thresholds based on patch distribution
+        veg_thresh = max(0.06, np.percentile(veg_delta.flatten(), 85))
+        water_thresh = max(0.03, np.percentile(water_delta_p.flatten(), 85))
+
+        veg_mask_patch = veg_delta > veg_thresh
+        water_mask_patch = water_delta_p > water_thresh
+
+        # Convert patch mask to pixel mask
+        mask_veg = np.kron(veg_mask_patch.astype(np.uint8), np.ones((patch_hw, patch_hw), dtype=np.uint8))
+        mask_water = np.kron(water_mask_patch.astype(np.uint8), np.ones((patch_hw, patch_hw), dtype=np.uint8))
+
+        # Morphological helpers (small 3x3 erosion/dilation) using fast sums
+        def erode3(binary: np.ndarray):
+            padded = np.pad(binary, 1, mode="constant", constant_values=0)
+            s = (
+                padded[:-2, :-2] + padded[:-2,1:-1] + padded[:-2,2:] +
+                padded[1:-1, :-2] + padded[1:-1,1:-1] + padded[1:-1,2:] +
+                padded[2:, :-2] + padded[2:,1:-1] + padded[2:,2:]
+            )
+            return (s == 9).astype(np.uint8)
+
+        def dilate3(binary: np.ndarray):
+            padded = np.pad(binary, 1, mode="constant", constant_values=0)
+            s = (
+                padded[:-2, :-2] + padded[:-2,1:-1] + padded[:-2,2:] +
+                padded[1:-1, :-2] + padded[1:-1,1:-1] + padded[1:-1,2:] +
+                padded[2:, :-2] + padded[2:,1:-1] + padded[2:,2:]
+            )
+            return (s > 0).astype(np.uint8)
+
+        # Clean up masks: open then close to remove speckles
+        veg_e = erode3(mask_veg)
+        veg_open = dilate3(veg_e)
+        veg_clean = veg_open
+
+        water_e = erode3(mask_water)
+        water_open = dilate3(water_e)
+        water_clean = water_open
+
+        # Outline extraction
+        veg_outline = (veg_clean & (~erode3(veg_clean))).astype(np.uint8)
+        water_outline = (water_clean & (~erode3(water_clean))).astype(np.uint8)
+
+        # Create RGBA images
+        def mask_png_b64(mask_px: np.ndarray, color=(0,255,0), fill_alpha=150):
             rgba = np.zeros((side, side, 4), dtype=np.uint8)
-            if outline:
-                # simple 4-neighbor erosion at patch level
-                eroded = np.zeros_like(mask_patch, dtype=bool)
-                h, w = mask_patch.shape
-                for i in range(h):
-                    for j in range(w):
-                        if not mask_patch[i, j]:
-                            continue
-                        neighbors = True
-                        for di, dj in ((-1,0),(1,0),(0,-1),(0,1)):
-                            ni, nj = i + di, j + dj
-                            if ni < 0 or nj < 0 or ni >= h or nj >= w or (not mask_patch[ni, nj]):
-                                neighbors = False
-                                break
-                        eroded[i, j] = neighbors
-                boundary = mask_patch & (~eroded)
-                boundary_u = np.kron(boundary.astype(np.uint8), np.ones((patch_hw, patch_hw), dtype=np.uint8))
-                rgba[..., :3] = 0
-                rgba[..., :3] += np.array(color, dtype=np.uint8).reshape((1,1,3))
-                rgba[..., 3] = (boundary_u * 255).astype(np.uint8)
-            else:
-                rgba[..., :3] = np.array(color, dtype=np.uint8).reshape((1,1,3))
-                rgba[..., 3] = (mask_u * 120).astype(np.uint8)  # semi-transparent fill
+            rgba[..., :3] = np.array(color, dtype=np.uint8).reshape((1,1,3))
+            rgba[..., 3] = (mask_px * fill_alpha).astype(np.uint8)
             pil = Image.fromarray(rgba, mode="RGBA")
             bio = io.BytesIO()
             pil.save(bio, format="PNG")
             return base64.b64encode(bio.getvalue()).decode("ascii")
 
-        veg_png = patch_mask_to_png_b64(veg_mask_patch, color=(0,255,0), outline=False)
-        water_png = patch_mask_to_png_b64(water_mask_patch, color=(0,150,255), outline=False)
+        def outline_png_b64(out_px: np.ndarray, color=(0,255,0)):
+            rgba = np.zeros((side, side, 4), dtype=np.uint8)
+            rgba[..., :3] = np.array(color, dtype=np.uint8).reshape((1,1,3))
+            rgba[..., 3] = (out_px * 255).astype(np.uint8)
+            pil = Image.fromarray(rgba, mode="RGBA")
+            bio = io.BytesIO()
+            pil.save(bio, format="PNG")
+            return base64.b64encode(bio.getvalue()).decode("ascii")
+
+        veg_png = mask_png_b64(veg_clean, color=(20,200,20), fill_alpha=140)
+        veg_outline_png = outline_png_b64(veg_outline, color=(0,255,0))
+        water_png = mask_png_b64(water_clean, color=(0,150,255), fill_alpha=140)
+        water_outline_png = outline_png_b64(water_outline, color=(0,150,255))
 
         # Heatmap PNG
         bio = io.BytesIO()
@@ -423,7 +475,9 @@ async def change_overlay(
         return OverlayResponse(
             heatmap_png_base64=heat_b64,
             vegetation_mask_png_base64=veg_png,
+            vegetation_mask_outline_png_base64=veg_outline_png,
             flood_mask_png_base64=water_png,
+            flood_mask_outline_png_base64=water_outline_png,
             heatmap_values=diffs.tolist(),
         )
     except HTTPException:
