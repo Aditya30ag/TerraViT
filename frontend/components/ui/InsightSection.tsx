@@ -2,13 +2,13 @@
 
 export default function InsightSection() {
   return (
-    <section className="relative">
+    <section className="relative z-0">
       {/* Glow Background */}
       <div className="absolute inset-0 bg-gradient-to-b from-blue-500/10 via-purple-500/10 to-transparent blur-3xl" />
 
       {/* Glass Card */}
       <div className="relative backdrop-blur-xl bg-white/5 border border-white/10 rounded-3xl p-10 shadow-2xl">
-        <h2 className="text-4xl font-extrabold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-300">
+        <h2 className="text-4xl font-extrabold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-300 py-1">
           Satellite Insights
         </h2>
 

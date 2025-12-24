@@ -50,10 +50,10 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
                     About
                   </Link>
                 </li>
-                <li className="relative z-100">
+                <li className="relative z-50">
                   <button
                     onClick={() => toggleDropdown("desktop-resources")}
-                    className="flex items-center hover:text-foreground px-3 py-2 text-sm transition-colors rounded-lg z-100"
+                    className="flex items-center hover:text-foreground px-3 py-2 text-sm transition-colors rounded-lg z-[9999]"
                   >
                     Resources
                     <ChevronDown
@@ -63,13 +63,21 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
                     />
                   </button>
                   {openDropdown === "desktop-resources" && (
-                    <ul className="absolute top-full left-0 mt-2 p-2 bg-card border border-border shadow-lg rounded-xl z-100 w-48">
+                    <ul className="absolute top-full left-0 mt-2 p-2 bg-card border border-border shadow-lg rounded-xl z-[9999] w-48">
                       <li>
                         <Link
                           href="/climate-intel"
                           className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
                         >
                           Climate Intelligence
+                        </Link>
+                      </li>
+                      <li>
+                        <Link
+                          href="/satellite-change-detection"
+                          className="block px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
+                        >
+                          Satellite Change Detection
                         </Link>
                       </li>
                       <li>
@@ -116,7 +124,7 @@ const NavbarHero: React.FC<NavbarHeroProps> = ({
                 <Menu className="h-6 w-6" />
               </button>
               {isMobileMenuOpen && (
-                <ul className="absolute top-full right-0 mt-2 p-2 shadow-lg bg-card border border-border rounded-xl w-56 z-30">
+                <ul className="absolute top-full right-0 mt-2 p-2 shadow-lg bg-card border border-border rounded-xl w-56 z-[9999]">
                   <li>
                     <Link
                       href="/about"

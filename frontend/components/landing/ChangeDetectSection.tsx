@@ -88,8 +88,8 @@ export default function ChangeDetectSection() {
       <div className="relative backdrop-blur-xl bg-white/5 border border-white/10 rounded-3xl p-10 shadow-2xl">
 
         {/* TITLE */}
-        <h2 className="text-4xl font-extrabold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-blue-300 to-purple-400">
-          Satellite Change Detection
+        <h2 className="text-4xl font-extrabold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-blue-300 to-purple-400 py-2">
+          Satellite Change Detection in Clusters
         </h2>
 
         <p className="text-slate-300 text-sm max-w-2xl mb-8">
