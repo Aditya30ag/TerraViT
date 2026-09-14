@@ -1,4 +1,4 @@
-# 🌍 TerraViT - Vision Transformer for Earth's Climate Intelligence
+## TerraViT - Vision Transformer for Earth's Climate Intelligence
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
@@ -10,24 +10,24 @@ TerraViT is an end-to-end Earth Observation and climate intelligence platform th
 
 ---
 
-## 🚀 What We Built
+## What We Built
 
 TerraViT bridges the gap between raw remote-sensing satellite data and proactive environmental decision-making. The platform unites deep learning vision models with real-time meteorological data feeds into a cohesive, production-grade system:
 
-- 🛰️ **Satellite Imagery Intelligence**: Instant feature extraction and representation analysis from optical satellite imagery using pre-trained Vision Transformers.
-- 🔄 **Multi-Temporal Change Detection**: Bi-temporal comparison ("before" vs. "after") that computes patch-level feature differences to automatically surface land transformations.
-- 🎨 **Dynamic Visual Overlays**:
+- **Satellite Imagery Intelligence**: Instant feature extraction and representation analysis from optical satellite imagery using pre-trained Vision Transformers.
+- **Multi-Temporal Change Detection**: Bi-temporal comparison ("before" vs. "after") that computes patch-level feature differences to automatically surface land transformations.
+- **Dynamic Visual Overlays**:
   - **AI Feature Heatmaps**: Highlighting areas with significant structural and spectral shifts across temporal checkpoints.
   - **Vegetation Stress & Loss Masks**: Identifying canopy loss, deforestation, and agricultural decline.
   - **Flood & Water Extent Masks**: Segmenting standing water accumulation, swollen riverbanks, and flood plains.
-- 🌡️ **Geospatial Climate Risk Profiling**: Location-specific environmental risk evaluations (Heatwaves, Flooding, Vegetation Stress, Air Quality Proxy, and Overall Composite Risk) calculated on demand for any GPS coordinate.
-- 📈 **Decadal Climate Risk Trends**: Analysis of 10-year historical climate patterns utilizing ERA5 atmospheric reanalysis data to identify long-term climate vulnerabilities.
-- 🚨 **Autonomous Early-Warning Engine**: Continuous background surveillance for registered geographical locations that detects threshold-breaching anomalies and streams live alerts via Server-Sent Events (SSE) and webhooks.
-- 💻 **Interactive Full-Stack Web Application**: A responsive, responsive-first user interface built with Next.js 14, featuring before-and-after image comparison tools, risk dashboards, interactive charts, and live alert feeds.
+- **Geospatial Climate Risk Profiling**: Location-specific environmental risk evaluations (Heatwaves, Flooding, Vegetation Stress, Air Quality Proxy, and Overall Composite Risk) calculated on demand for any GPS coordinate.
+- **Decadal Climate Risk Trends**: Analysis of 10-year historical climate patterns utilizing ERA5 atmospheric reanalysis data to identify long-term climate vulnerabilities.
+- **Autonomous Early-Warning Engine**: Continuous background surveillance for registered geographical locations that detects threshold-breaching anomalies and streams live alerts via Server-Sent Events (SSE) and webhooks.
+- **Interactive Full-Stack Web Application**: A responsive, responsive-first user interface built with Next.js 14, featuring before-and-after image comparison tools, risk dashboards, interactive charts, and live alert feeds.
 
 ---
 
-## 🎯 Use Cases
+## Use Cases
 
 | Domain | Application Scenario |
 |---|---|
@@ -40,7 +40,7 @@ TerraViT bridges the gap between raw remote-sensing satellite data and proactive
 
 ---
 
-## 🧠 Model Architecture: SatViT
+## Model Architecture: SatViT
 
 At the heart of TerraViT's visual analysis is **SatViT**, a Masked Autoencoder (MAE) Vision Transformer specifically pre-trained on multi-spectral satellite imagery to understand complex remote-sensing patterns.
 
@@ -116,6 +116,6 @@ At the heart of TerraViT's visual analysis is **SatViT**, a Masked Autoencoder (
 
 ---
 
-## 📄 License
+## License
 
 This project is open source and available under the terms of the [MIT License](LICENSE).
