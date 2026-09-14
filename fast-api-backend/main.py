@@ -304,6 +304,9 @@ async def change_overlay(
     """Return visual overlays (heatmap + heuristic masks) for before/after images.
 
     Overlays are returned as base64-encoded PNG strings (no data URI prefix).
+    Heatmap is RGBA with alpha proportional to model feature change magnitude.
+    Vegetation and Flood masks are computed at image resolution to eliminate blockiness,
+    and output at the exact resolution/aspect ratio of the reference image.
     """
     for f, name in ((before, "before"), (after, "after")):
         if f.content_type is None or not f.content_type.startswith("image/"):
@@ -321,150 +324,174 @@ async def change_overlay(
         terravit_model.load()
 
     try:
-        # Get per-patch decoder predictions
-        before_pred = terravit_model.image_patch_preds(before_img)  # [L, io_dim]
-        after_pred = terravit_model.image_patch_preds(after_img)
+        # 1. Reference geometry alignment: use 'after' as spatial reference
+        w_ref, h_ref = after_img.size
+        if before_img.size != (w_ref, h_ref):
+            before_aligned = before_img.resize((w_ref, h_ref), resample=Image.Resampling.BILINEAR)
+        else:
+            before_aligned = before_img
+
+        # 2. Model patch-level predictions for Heatmap
+        patch_hw = terravit_model._patch_hw or 8
+        grid_size = int((terravit_model._num_patches or 1024) ** 0.5)
+        model_side = patch_hw * grid_size
+
+        before_model_in = before_aligned.resize((model_side, model_side), resample=Image.Resampling.BILINEAR)
+        after_model_in = after_img.resize((model_side, model_side), resample=Image.Resampling.BILINEAR)
+
+        before_pred = terravit_model.image_patch_preds(before_model_in)  # [L, io_dim]
+        after_pred = terravit_model.image_patch_preds(after_model_in)
 
         import torch as _torch
 
         diffs = _torch.norm(after_pred - before_pred, dim=1).cpu().numpy()  # (L,)
 
         L = diffs.shape[0]
-        grid_size = int(L ** 0.5)
         if grid_size * grid_size != L:
-            # fallback to square grid assumption
             grid_size = int(round(L ** 0.5))
 
         heat_grid = diffs.reshape(grid_size, grid_size)
 
-        # Better normalization: clip extremes using percentiles then normalize
+        # Robust normalization on model patch diffs
         flat = diffs.flatten()
-        vmin = float(np.percentile(flat, 1))
-        vmax = float(np.percentile(flat, 99))
+        vmin = float(np.percentile(flat, 10))
+        vmax = float(np.percentile(flat, 98))
         rng = max(vmax - vmin, 1e-6)
         norm = np.clip((heat_grid - vmin) / rng, 0.0, 1.0)
 
-        # Simple smoothing (3x3 average) on patch grid to reduce noise
-        k = np.array([[1,1,1],[1,1,1],[1,1,1]], dtype=float) / 9.0
-        # pad and convolve via simple sums (small kernels are fine)
+        # 3x3 Gaussian-like spatial smoothing on patch grid
+        k = np.array([[1, 2, 1], [2, 4, 2], [1, 2, 1]], dtype=float) / 16.0
         padded = np.pad(norm, 1, mode="edge")
         smooth = (
-            padded[:-2, :-2] * k[0,0] + padded[:-2,1:-1] * k[0,1] + padded[:-2,2:] * k[0,2] +
-            padded[1:-1, :-2] * k[1,0] + padded[1:-1,1:-1] * k[1,1] + padded[1:-1,2:] * k[1,2] +
-            padded[2:, :-2] * k[2,0] + padded[2:,1:-1] * k[2,1] + padded[2:,2:] * k[2,2]
+            padded[:-2, :-2] * k[0, 0] + padded[:-2, 1:-1] * k[0, 1] + padded[:-2, 2:] * k[0, 2] +
+            padded[1:-1, :-2] * k[1, 0] + padded[1:-1, 1:-1] * k[1, 1] + padded[1:-1, 2:] * k[1, 2] +
+            padded[2:, :-2] * k[2, 0] + padded[2:, 1:-1] * k[2, 1] + padded[2:, 2:] * k[2, 2]
         )
+        smooth = np.clip(smooth, 0.0, 1.0)
 
-        heat_norm = np.clip(smooth, 0.0, 1.0)
+        # Smoothly upscale heatmap directly to reference image dimensions (w_ref, h_ref)
+        smooth_pil = Image.fromarray((smooth * 255).astype(np.uint8)).resize(
+            (w_ref, h_ref), resample=Image.Resampling.BICUBIC
+        )
+        heat_full = np.asarray(smooth_pil).astype(np.float32) / 255.0
 
-        # Create colorized heatmap (red -> yellow)
-        heat_rgb = np.zeros((grid_size, grid_size, 3), dtype=np.uint8)
-        heat_rgb[..., 0] = (255 * heat_norm).astype(np.uint8)  # R
-        heat_rgb[..., 1] = (200 * (heat_norm ** 0.6)).astype(np.uint8)  # G
-        heat_rgb[..., 2] = 30
+        # Build true RGBA heatmap (transparent where change is low, vivid thermal ramp where change is high)
+        heat_rgba = np.zeros((h_ref, w_ref, 4), dtype=np.uint8)
+        change_mask = heat_full > 0.15
+        t = np.clip((heat_full - 0.15) / 0.85, 0.0, 1.0)
 
-        patch_hw = terravit_model._patch_hw or 8
-        side = patch_hw * grid_size
+        # Yellow (255, 230, 20) -> Orange (255, 120, 10) -> Red (230, 20, 20)
+        heat_rgba[..., 0] = (255 * change_mask).astype(np.uint8)
+        heat_rgba[..., 1] = (np.clip(230 * (1.0 - t ** 0.8), 20, 230) * change_mask).astype(np.uint8)
+        heat_rgba[..., 2] = (np.clip(20 * (1.0 - t), 0, 20) * change_mask).astype(np.uint8)
+        # Alpha ramps smoothly from 50 to 200 (max ~78% opacity)
+        heat_rgba[..., 3] = (np.clip(50 + 150 * (t ** 0.7), 0, 200) * change_mask).astype(np.uint8)
+        heat_img = Image.fromarray(heat_rgba, mode="RGBA")
 
-        # Upscale and blur by resizing (gives smoother visual)
-        heat_img = Image.fromarray(heat_rgb).resize((side, side), resample=Image.BILINEAR)
+        # 3. High-Resolution Spectral Indices for Vegetation Loss & Flood Detection
+        # Process at reference resolution (or capped at 1024 max side for efficiency)
+        max_dim = max(w_ref, h_ref)
+        if max_dim > 1024:
+            scale = 1024.0 / max_dim
+            proc_w = int(round(w_ref * scale))
+            proc_h = int(round(h_ref * scale))
+            b_before_img = before_aligned.resize((proc_w, proc_h), resample=Image.Resampling.BILINEAR)
+            b_after_img = after_img.resize((proc_w, proc_h), resample=Image.Resampling.BILINEAR)
+        else:
+            proc_w, proc_h = w_ref, h_ref
+            b_before_img = before_aligned
+            b_after_img = after_img
 
-        # Heuristic indices using RGB proxies (improved)
-        b_before = np.asarray(before_img.resize((side, side))).astype(np.float32) / 255.0
-        b_after = np.asarray(after_img.resize((side, side))).astype(np.float32) / 255.0
+        b_before = np.asarray(b_before_img).astype(np.float32) / 255.0
+        b_after = np.asarray(b_after_img).astype(np.float32) / 255.0
 
         Rb, Gb, Bb = b_before[..., 0], b_before[..., 1], b_before[..., 2]
         Ra, Ga, Ba = b_after[..., 0], b_after[..., 1], b_after[..., 2]
 
-        # Excess Green (ExG) proxy: 2G - R - B
-        exg_b = 2 * Gb - Rb - Bb
-        exg_a = 2 * Ga - Ra - Ba
-        exg_delta = exg_b - exg_a  # positive => vegetation loss
+        # Excess Green (ExG): 2G - R - B
+        exg_b = 2.0 * Gb - Rb - Bb
+        exg_a = 2.0 * Ga - Ra - Ba
+        # Vegetation presence check in 'before': must actually be green
+        is_veg_before = (exg_b > 0.05) & (Gb > Rb) & (Gb > Bb * 0.85)
+        # Vegetation loss: was green before, drop in ExG exceeds threshold, and relative drop is substantial
+        veg_loss_raw = is_veg_before & ((exg_b - exg_a) > 0.08) & (exg_a < exg_b * 0.75)
 
-        # NDWI-like proxy (green-blue ratio): (G - R) / (G + R) approx water sensitivity
-        ndwi_b = (Gb - Rb) / (np.clip(Gb + Rb, 1e-6, None))
-        ndwi_a = (Ga - Ra) / (np.clip(Ga + Ra, 1e-6, None))
-        water_delta = ndwi_a - ndwi_b  # positive => more water
+        # True RGB Water Index: (B - R) / (B + R + eps) with green/brightness bounds
+        wi_b = (Bb - Rb) / np.clip(Bb + Rb, 1e-6, None)
+        wi_a = (Ba - Ra) / np.clip(Ba + Ra, 1e-6, None)
+        bright_b = (Rb + Gb + Bb) / 3.0
+        bright_a = (Ra + Ga + Ba) / 3.0
 
-        # Aggregate to patch-level using block mean
-        def patch_mean(arr):
-            h, w = arr.shape
-            arr = arr.reshape(grid_size, patch_hw, grid_size, patch_hw).mean(axis=(1, 3))
-            return arr
+        # Water presence in 'before' and 'after'
+        is_water_b = (Bb > Rb) & (Bb >= Gb * 0.85) & (wi_b > 0.05) & (bright_b < 0.60)
+        is_water_a = (Ba > Ra) & (Ba >= Ga * 0.85) & (wi_a > 0.05) & (bright_a < 0.60)
+        # Flood / water increase: must be water in 'after', was NOT water in 'before', and positive delta
+        flood_raw = is_water_a & (~is_water_b) & ((wi_a - wi_b) > 0.08)
 
-        exg_b_p = patch_mean(exg_b)
-        exg_a_p = patch_mean(exg_a)
-        ndwi_b_p = patch_mean(ndwi_b)
-        ndwi_a_p = patch_mean(ndwi_a)
-
-        veg_delta = exg_b_p - exg_a_p
-        water_delta_p = ndwi_a_p - ndwi_b_p
-
-        # Adaptive thresholds based on patch distribution
-        veg_thresh = max(0.06, np.percentile(veg_delta.flatten(), 85))
-        water_thresh = max(0.03, np.percentile(water_delta_p.flatten(), 85))
-
-        veg_mask_patch = veg_delta > veg_thresh
-        water_mask_patch = water_delta_p > water_thresh
-
-        # Convert patch mask to pixel mask
-        mask_veg = np.kron(veg_mask_patch.astype(np.uint8), np.ones((patch_hw, patch_hw), dtype=np.uint8))
-        mask_water = np.kron(water_mask_patch.astype(np.uint8), np.ones((patch_hw, patch_hw), dtype=np.uint8))
-
-        # Morphological helpers (small 3x3 erosion/dilation) using fast sums
-        def erode3(binary: np.ndarray):
-            padded = np.pad(binary, 1, mode="constant", constant_values=0)
+        # Morphological noise cleanup (opening = erode then dilate, removes single pixel noise)
+        def morph_clean(binary: np.ndarray) -> np.ndarray:
+            pad = 1
+            padded = np.pad(binary, pad, mode="constant", constant_values=0)
             s = (
-                padded[:-2, :-2] + padded[:-2,1:-1] + padded[:-2,2:] +
-                padded[1:-1, :-2] + padded[1:-1,1:-1] + padded[1:-1,2:] +
-                padded[2:, :-2] + padded[2:,1:-1] + padded[2:,2:]
+                padded[:-2, :-2] + padded[:-2, 1:-1] + padded[:-2, 2:] +
+                padded[1:-1, :-2] + padded[1:-1, 1:-1] + padded[1:-1, 2:] +
+                padded[2:, :-2] + padded[2:, 1:-1] + padded[2:, 2:]
             )
-            return (s == 9).astype(np.uint8)
+            eroded = (s == 9).astype(np.uint8)
+            p_eroded = np.pad(eroded, pad, mode="constant", constant_values=0)
+            s_dil = (
+                p_eroded[:-2, :-2] + p_eroded[:-2, 1:-1] + p_eroded[:-2, 2:] +
+                p_eroded[1:-1, :-2] + p_eroded[1:-1, 1:-1] + p_eroded[1:-1, 2:] +
+                p_eroded[2:, :-2] + p_eroded[2:, 1:-1] + p_eroded[2:, 2:]
+            )
+            opened = (s_dil > 0).astype(np.uint8)
+            return opened
 
-        def dilate3(binary: np.ndarray):
-            padded = np.pad(binary, 1, mode="constant", constant_values=0)
+        def extract_outline(mask: np.ndarray) -> np.ndarray:
+            pad = 1
+            padded = np.pad(mask, pad, mode="constant", constant_values=0)
             s = (
-                padded[:-2, :-2] + padded[:-2,1:-1] + padded[:-2,2:] +
-                padded[1:-1, :-2] + padded[1:-1,1:-1] + padded[1:-1,2:] +
-                padded[2:, :-2] + padded[2:,1:-1] + padded[2:,2:]
+                padded[:-2, :-2] + padded[:-2, 1:-1] + padded[:-2, 2:] +
+                padded[1:-1, :-2] + padded[1:-1, 1:-1] + padded[1:-1, 2:] +
+                padded[2:, :-2] + padded[2:, 1:-1] + padded[2:, 2:]
             )
-            return (s > 0).astype(np.uint8)
+            eroded = (s == 9).astype(np.uint8)
+            return (mask & (~eroded)).astype(np.uint8)
 
-        # Clean up masks: open then close to remove speckles
-        veg_e = erode3(mask_veg)
-        veg_open = dilate3(veg_e)
-        veg_clean = veg_open
+        veg_clean_proc = morph_clean(veg_loss_raw.astype(np.uint8))
+        water_clean_proc = morph_clean(flood_raw.astype(np.uint8))
 
-        water_e = erode3(mask_water)
-        water_open = dilate3(water_e)
-        water_clean = water_open
+        # Resize masks to reference image dimensions (w_ref, h_ref) if downscaled
+        if (proc_w, proc_h) != (w_ref, h_ref):
+            veg_clean = np.asarray(
+                Image.fromarray(veg_clean_proc * 255).resize((w_ref, h_ref), resample=Image.Resampling.NEAREST)
+            ) > 127
+            water_clean = np.asarray(
+                Image.fromarray(water_clean_proc * 255).resize((w_ref, h_ref), resample=Image.Resampling.NEAREST)
+            ) > 127
+        else:
+            veg_clean = veg_clean_proc.astype(bool)
+            water_clean = water_clean_proc.astype(bool)
 
-        # Outline extraction
-        veg_outline = (veg_clean & (~erode3(veg_clean))).astype(np.uint8)
-        water_outline = (water_clean & (~erode3(water_clean))).astype(np.uint8)
+        veg_outline = extract_outline(veg_clean.astype(np.uint8))
+        water_outline = extract_outline(water_clean.astype(np.uint8))
 
-        # Create RGBA images
-        def mask_png_b64(mask_px: np.ndarray, color=(0,255,0), fill_alpha=150):
-            rgba = np.zeros((side, side, 4), dtype=np.uint8)
-            rgba[..., :3] = np.array(color, dtype=np.uint8).reshape((1,1,3))
-            rgba[..., 3] = (mask_px * fill_alpha).astype(np.uint8)
-            pil = Image.fromarray(rgba, mode="RGBA")
+        # Helper to encode RGBA masks
+        def mask_to_png_b64(mask_arr: np.ndarray, color: tuple[int, int, int], alpha: int = 150) -> str:
+            rgba = np.zeros((h_ref, w_ref, 4), dtype=np.uint8)
+            rgba[..., 0] = color[0]
+            rgba[..., 1] = color[1]
+            rgba[..., 2] = color[2]
+            rgba[..., 3] = (mask_arr * alpha).astype(np.uint8)
+            pil_img = Image.fromarray(rgba, mode="RGBA")
             bio = io.BytesIO()
-            pil.save(bio, format="PNG")
+            pil_img.save(bio, format="PNG")
             return base64.b64encode(bio.getvalue()).decode("ascii")
 
-        def outline_png_b64(out_px: np.ndarray, color=(0,255,0)):
-            rgba = np.zeros((side, side, 4), dtype=np.uint8)
-            rgba[..., :3] = np.array(color, dtype=np.uint8).reshape((1,1,3))
-            rgba[..., 3] = (out_px * 255).astype(np.uint8)
-            pil = Image.fromarray(rgba, mode="RGBA")
-            bio = io.BytesIO()
-            pil.save(bio, format="PNG")
-            return base64.b64encode(bio.getvalue()).decode("ascii")
-
-        veg_png = mask_png_b64(veg_clean, color=(20,200,20), fill_alpha=140)
-        veg_outline_png = outline_png_b64(veg_outline, color=(0,255,0))
-        water_png = mask_png_b64(water_clean, color=(0,150,255), fill_alpha=140)
-        water_outline_png = outline_png_b64(water_outline, color=(0,150,255))
+        veg_png = mask_to_png_b64(veg_clean.astype(np.uint8), color=(34, 197, 94), alpha=160)
+        veg_outline_png = mask_to_png_b64(veg_outline, color=(22, 242, 77), alpha=255)
+        water_png = mask_to_png_b64(water_clean.astype(np.uint8), color=(14, 165, 233), alpha=160)
+        water_outline_png = mask_to_png_b64(water_outline, color=(56, 189, 248), alpha=255)
 
         # Heatmap PNG
         bio = io.BytesIO()

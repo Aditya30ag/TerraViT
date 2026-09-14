@@ -55,37 +55,59 @@ export default function MarkDiffByOutline({
           </button>
         </div>
 
-        <div className="relative w-full border border-white/5 rounded-md overflow-hidden" style={{ paddingTop: "56%" }}>
-          {/* Base image (selectable) */}
-          <img src={baseImage === "after" ? afterSrc : beforeSrc} alt="Base" className="absolute inset-0 w-full h-full object-contain" style={{ top: 0, left: 0 }} />
-
-          {/* heatmap overlay */}
-          {heatmapSrc && showHeat && (
+        <div className="relative w-full border border-white/5 rounded-md overflow-hidden bg-black/40 flex items-center justify-center p-2 min-h-[350px] max-h-[600px]">
+          <div className="relative inline-block max-h-[580px]">
+            {/* Base image (selectable) */}
             <img
-              src={heatmapSrc}
-              alt="Heatmap"
-              className="absolute inset-0 w-full h-full object-contain mix-blend-screen"
-              style={{ opacity, top: 0, left: 0 }}
+              src={baseImage === "after" ? afterSrc : beforeSrc}
+              alt="Base"
+              className="max-h-[580px] w-auto max-w-full object-contain rounded-sm block"
             />
-          )}
 
-          {/* vegetation mask (fill or outline) */}
-          {vegetationSrc && showVeg && !showVegOutline && (
-            <img src={vegetationSrc} alt="Vegetation" className="absolute inset-0 w-full h-full object-contain" style={{ top: 0, left: 0 }} />
-          )}
-          {/* vegetation outline */}
-          {vegetationOutlineSrc && showVeg && showVegOutline && (
-            <img src={vegetationOutlineSrc} alt="Vegetation Outline" className="absolute inset-0 w-full h-full object-contain" style={{ top: 0, left: 0 }} />
-          )}
+            {/* heatmap overlay */}
+            {heatmapSrc && showHeat && (
+              <img
+                src={heatmapSrc}
+                alt="Heatmap"
+                className="absolute inset-0 w-full h-full object-contain pointer-events-none rounded-sm"
+                style={{ opacity }}
+              />
+            )}
 
-          {/* flood mask (fill or outline) */}
-          {floodSrc && showFlood && !showWaterOutline && (
-            <img src={floodSrc} alt="Flood" className="absolute inset-0 w-full h-full object-contain" style={{ top: 0, left: 0 }} />
-          )}
-          {/* flood outline */}
-          {floodOutlineSrc && showFlood && showWaterOutline && (
-            <img src={floodOutlineSrc} alt="Flood Outline" className="absolute inset-0 w-full h-full object-contain" style={{ top: 0, left: 0 }} />
-          )}
+            {/* vegetation mask (fill or outline) */}
+            {vegetationSrc && showVeg && !showVegOutline && (
+              <img
+                src={vegetationSrc}
+                alt="Vegetation"
+                className="absolute inset-0 w-full h-full object-contain pointer-events-none rounded-sm"
+              />
+            )}
+            {/* vegetation outline */}
+            {vegetationOutlineSrc && showVeg && showVegOutline && (
+              <img
+                src={vegetationOutlineSrc}
+                alt="Vegetation Outline"
+                className="absolute inset-0 w-full h-full object-contain pointer-events-none rounded-sm"
+              />
+            )}
+
+            {/* flood mask (fill or outline) */}
+            {floodSrc && showFlood && !showWaterOutline && (
+              <img
+                src={floodSrc}
+                alt="Flood"
+                className="absolute inset-0 w-full h-full object-contain pointer-events-none rounded-sm"
+              />
+            )}
+            {/* flood outline */}
+            {floodOutlineSrc && showFlood && showWaterOutline && (
+              <img
+                src={floodOutlineSrc}
+                alt="Flood Outline"
+                className="absolute inset-0 w-full h-full object-contain pointer-events-none rounded-sm"
+              />
+            )}
+          </div>
         </div>
       </div>
 
