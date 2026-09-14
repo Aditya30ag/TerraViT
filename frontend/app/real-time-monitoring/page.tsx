@@ -2,9 +2,10 @@
 import React, { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { NavbarHero } from "@/components/landing/hero-with-video";
+import { API_BASE_URL } from "@/lib/config";
 const ClimateMap = dynamic(() => import("@/components/landing/ClimateMap"), { ssr: false });
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
+const API_BASE = API_BASE_URL;
 
 interface Alert {
   id: string;

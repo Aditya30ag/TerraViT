@@ -3,8 +3,7 @@
 import React, { useState, useMemo } from "react";
 import ChangeLineChart from "@/components/landing/ChangeLineChart";
 import MarkDiffByOutline from "@/components/landing/MarkDiffByOutline";
-
-const API_BASE_URL = "http://localhost:8000";
+import { API_BASE_URL } from "@/lib/config";
 
 // Histogram bin edges
 const bins = [-1, -0.5, -0.2, 0, 0.2, 0.5, 1];
@@ -74,7 +73,7 @@ export default function ChangeDetectSection() {
         // ignore overlay errors
       }
     } catch (e) {
-      setError("Unable to reach TerraViT backend. Is it running on port 8000?");
+      setError(`Unable to reach TerraViT backend at ${API_BASE_URL}. Please ensure the server is running.`);
     } finally {
       setIsLoading(false);
     }

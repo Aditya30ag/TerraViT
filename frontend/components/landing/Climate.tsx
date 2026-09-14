@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import dynamic from "next/dynamic";
+import { API_BASE_URL } from "@/lib/config";
 
 const ClimateMap = dynamic(() => import("./ClimateMap"), { ssr: false });
 
@@ -62,8 +63,6 @@ export default function Climate() {
     }
   };
 
-  const API_BASE_URL = "http://localhost:8000";
-
   const fetchClimateRisk = async () => {
     setIsLoading(true);
     setError("");
@@ -113,7 +112,7 @@ export default function Climate() {
         }
       } catch {}
     } catch {
-      setError("Unable to reach TerraViT backend. Is it running on port 8000?");
+      setError(`Unable to reach TerraViT backend at ${API_BASE_URL}. Please ensure the server is running.`);
     } finally {
       setIsLoading(false);
     }
