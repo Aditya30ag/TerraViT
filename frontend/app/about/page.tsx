@@ -22,15 +22,14 @@ export default function AboutPage() {
         </section>
 
         <section className="mt-10 space-y-4">
-          <h2 className="text-2xl font-semibold">ACM Bennett University Project</h2>
+          <h2 className="text-2xl font-semibold">Our Mission</h2>
           <p className="text-gray-100 max-w-3xl">
-            This project is proudly developed and represented by the ACM Student
-            Chapter at Bennett University. It showcases how AI, remote sensing,
-            and modern web technologies can be combined to build practical tools
-            for climate risk assessment and environmental monitoring.
+            TerraViT showcases how AI, remote sensing, and modern web
+            technologies can be combined to build practical tools for climate
+            risk assessment and environmental monitoring.
           </p>
           <p className="text-gray-100 max-w-3xl">
-            The goal of TerraViT is to empower students, researchers, and
+            The goal of TerraViT is to empower researchers, developers, and
             organizations with transparent, data-driven climate intelligence that
             can support sustainable decision making.
           </p>
